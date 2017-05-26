@@ -8,12 +8,12 @@ import xlsxwriter
 
 session = requests.session()
 proxies = {'https': 'https://165.138.65.233:3128'}
-# proxies = {'https': 'https://54.153.98.123:8083'}
+proxies = {'https': 'https://54.153.98.123:8083'}
 # proxies = {'https': 'https://207.160.104.5:3128'}
 # proxies = {'https': 'https://35.166.171.212:3128'}
 # proxies = {'https': 'https://104.198.223.14:80'}
 # proxies = {'https': 'https://192.241.145.201:8080'}
-proxies = {'https': 'https://207.99.118.74:8080'}
+proxies = {'https': 'https://104.198.32.133:80'}
 headers = {
     "authority": "www.ncl.com",
     "method": "GET",
@@ -50,7 +50,7 @@ nao = 12
 to_write = []
 keys = []
 urls = set()
-while page_counter <= total_page_count:
+while page_counter <= int(total_page_count):
     print("page", page_counter)
     if page_counter == 1:
         url = "https://www.ncl.com/search_vacations?"
@@ -116,6 +116,119 @@ def calculate_days(date, duration):
     return calculated
 
 
+def get_from_code(dc):
+    if dc == 'CARIBBEAN':
+        return ['Carib', 'C']
+    if dc == 'ALASKA':
+        return ['Alaska', 'A']
+    if dc == 'ASIA':
+        return ['Exotics', 'O']
+    if dc == 'CANADA_NEW_ENGL':
+        return ['Canada/New England', 'NN']
+    if dc == 'GRNDX':
+        return ['Grand crossings', 'TBD']
+    if dc == 'EUROPE':
+        return ['Europe', 'E']
+    if dc == 'HAWAII':
+        return ['Hawaii', 'H']
+    if dc == 'PACIFIC_COASTAL':
+        return ['Pacific Coastal', 'PC']
+    if dc == 'PANAMA_CANAL':
+        return ['Panama Canal', 'T']
+    if dc == 'SOUTH_AMERICA':
+        return ['S. America', 'S']
+    if dc == 'TRANSATLANTIC':
+        return ['Transatlantic', 'X']
+    if dc == 'BERMUDA':
+        return ['Bermuda', 'BM']
+    if dc == 'BAHAMAS_FLORIDA':
+        return ['Bahamas', 'BH']
+    if dc == 'MEXICAN_RIVIERA':
+        return ['Mexico', 'M']
+    if dc == 'AUSTRALIA':
+        return ['Australia', 'AU']
+    else:
+        dests = []
+        for p in dc:
+            if p == "WEEKEND":
+                pass
+            else:
+                dests.append(p)
+        if "PANAMA_CANAL" in dests:
+            return ['Panama Canal', 'T']
+        if 'CUBA' in dests:
+            return ['CUBA', 'C']
+        return [dc, dc]
+
+
+def split_carib(ports, dc, dn):
+    cu = ['Santiago de Cuba', 'Cienfuegos', 'Havana']
+    wc = ['Costa Maya', 'Cozumel', 'Falmouth, Jamaica', 'George Town, Grand Cayman',
+          'Ocho Rios']
+
+    ec = ['Basseterre, St. Kitts', 'Bridgetown', 'Castries', 'Charlotte Amalie, St. Thomas',
+          'Fort De France', 'Kingstown, St. Vincent', 'Philipsburg', 'Ponce, Puerto Rico',
+          'Punta Cana, Dominican Rep', 'Roseau', 'San Juan', 'St. Croix, U.S.V.I.',
+          "St. George's", "St. John's", 'Tortola, B.V.I']
+
+    bm = ['Kings Wharf, Bermuda']
+    result = []
+    iscu = False
+    isec = False
+    iswc = False
+    ports_list = []
+    for i in range(len(ports)):
+        if i == 0:
+            pass
+        else:
+            ports_list.append(ports[i])
+    for element in cu:
+        for p in ports_list:
+            if p in element:
+                iscu = True
+    if not iscu:
+        for element in wc:
+            for p in ports_list:
+                if p in element:
+                    iswc = True
+    if not iswc:
+        for element in ec:
+            for p in ports_list:
+                if p in element:
+                    isec = True
+    if iscu:
+        result.append("Cuba")
+        result.append("C")
+        result.append("CU")
+        return result
+    elif iswc:
+        result.append("West Carib")
+        result.append("C")
+        result.append("WC")
+        return result
+    elif isec:
+        result.append("East Carib")
+        result.append("C")
+        result.append("EC")
+        return result
+    else:
+        result.append(dn)
+        result.append(dc)
+        result.append("")
+        return result
+
+
+def get_from_code2(dest, ports, dc, dn):
+    print(dest)
+    if "CARIBBEAN" in dest:
+        destination = split_carib(ports, dc, dn)
+        return [destination[0], destination[1]]
+    if 'Cococay' in ports or "Nassau" in ports or "Bahama Island" in ports:
+        return ['Bahamas', 'BH']
+    else:
+        return [dc, dn]
+
+
 def parse(c):
     vessel_name = c['ship_name']
     brochure_name = c['title']
@@ -125,8 +238,10 @@ def parse(c):
     cruise_id = ''
     cruise_line_name = 'Norwegian Cruise Lines'
     itinerary_id = ''
-    destination_name = destination
-    destination_code = ''
+    destination = get_from_code(destination)
+    destination_name = destination[0]
+    destination_code = destination[1]
+
     price_grid_url = c['price_grid_url']
     price_url = "https://www.ncl.com" + price_grid_url + ""
     page = session.post(price_url, headers=headers, proxies=proxies)
@@ -137,7 +252,6 @@ def parse(c):
             continue
         else:
             keys.append(key)
-        print(c['details_page_url'])
         sail_date = (convert_date(each['Record']['Properties']['p_Sail_Date']))
         return_date = (convert_date(each['Record']['Properties']['p_Sail_End_Date']))
         price_details = (each['Record']['stateroomPriceDetails'])
@@ -160,6 +274,21 @@ def parse(c):
                 suite_bucket_price = price_details['SUITE'][0]['leastPrice']
             else:
                 suite_bucket_price = "N/A"
+        if "Cruisetour" in brochure_name:
+            continue
+        ports = cruise_results['dimensions']['ShorexPortCode'].items()
+        portlist = []
+        for k, v in ports:
+            portlist.append(v)
+        if isinstance(destination_name, list):
+            destination = get_from_code2(destination_name, portlist, destination_code, destination_name)
+            destination_name = destination[0]
+            destination_code = destination[1]
+        if destination_name == 'Carib':
+            destination = split_carib(portlist, destination_code, destination_name)
+            destination_name = destination[0]
+            destination_code = destination[1]
+
         temp = [destination_code, destination_name, vessel_id, vessel_name, cruise_id, cruise_line_name, itinerary_id,
                 brochure_name, number_of_nights, sail_date, return_date,
                 interior_bucket_price, oceanview_bucket_price, balcony_bucket_price, suite_bucket_price]
