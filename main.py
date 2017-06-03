@@ -4,6 +4,7 @@ import os
 from multiprocessing.dummy import Pool as ThreadPool
 
 import requests
+import sqlite3
 import xlsxwriter
 
 session = requests.session()
@@ -13,7 +14,7 @@ proxies = {'https': 'https://54.153.98.123:8083'}
 # proxies = {'https': 'https://35.166.171.212:3128'}
 # proxies = {'https': 'https://104.198.223.14:80'}
 # proxies = {'https': 'https://192.241.145.201:8080'}
-proxies = {'https': 'https://104.198.32.133:80'}
+proxies = {'https': 'https://172.93.148.247:3128'}
 headers = {
     "authority": "www.ncl.com",
     "method": "GET",
@@ -40,7 +41,6 @@ def get_count():
 
 
 total_cruise_count = get_count()
-print(total_cruise_count)
 total_page_count = math.ceil(int(total_cruise_count) / 12)
 session.headers.update(headers)
 session.proxies.update(proxies)
@@ -51,7 +51,7 @@ to_write = []
 keys = []
 urls = set()
 while page_counter <= int(total_page_count):
-    print("page", page_counter)
+
     if page_counter == 1:
         url = "https://www.ncl.com/search_vacations?"
         urls.add(url)
@@ -148,30 +148,43 @@ def get_from_code(dc):
     if dc == 'AUSTRALIA':
         return ['Australia', 'AU']
     else:
-        dests = []
-        for p in dc:
-            if p == "WEEKEND":
-                pass
-            else:
-                dests.append(p)
-        if "PANAMA_CANAL" in dests:
-            return ['Panama Canal', 'T']
-        if 'CUBA' in dests:
-            return ['CUBA', 'C']
-        return [dc, dc]
+        try:
+            dests = []
+            for p in dc:
+                if p == "WEEKEND":
+                    pass
+                else:
+                    dests.append(p)
+            if "PANAMA_CANAL" in dests:
+                return ['Panama Canal', 'T']
+            if 'CUBA' in dests:
+                return ['Cuba', 'C']
+            return [dc, dc]
+        except TypeError:
+            return [dc, dc]
 
 
-def split_carib(ports, dc, dn):
-    cu = ['Santiago de Cuba', 'Cienfuegos', 'Havana']
-    wc = ['Costa Maya', 'Cozumel', 'Falmouth, Jamaica', 'George Town, Grand Cayman',
-          'Ocho Rios']
-
-    ec = ['Basseterre, St. Kitts', 'Bridgetown', 'Castries', 'Charlotte Amalie, St. Thomas',
-          'Fort De France', 'Kingstown, St. Vincent', 'Philipsburg', 'Ponce, Puerto Rico',
-          'Punta Cana, Dominican Rep', 'Roseau', 'San Juan', 'St. Croix, U.S.V.I.',
-          "St. George's", "St. John's", 'Tortola, B.V.I']
-
-    bm = ['Kings Wharf, Bermuda']
+def split_carib_auto(ports, dc, dn):
+    cu = []
+    wc = []
+    ec = []
+    bm = []
+    conn = sqlite3.connect('/home/fixxxer/PycharmProjects/PortsExplorer/ports.db')
+    c = conn.cursor()
+    c.execute("SELECT * FROM portlist WHERE destination_name='Cuba'")
+    for row in c.fetchall():
+        cu.append(row[0])
+    c.execute("SELECT * FROM portlist WHERE destination_name='West Carib'")
+    for row in c.fetchall():
+        wc.append(row[0])
+    c.execute("SELECT * FROM portlist WHERE destination_name='East Carib'")
+    for row in c.fetchall():
+        ec.append(row[0])
+    c.execute("SELECT * FROM portlist WHERE destination_name='Bermuda'")
+    for row in c.fetchall():
+        bm.append(row[0])
+    c.close()
+    conn.close()
     result = []
     iscu = False
     isec = False
@@ -184,17 +197,17 @@ def split_carib(ports, dc, dn):
             ports_list.append(ports[i])
     for element in cu:
         for p in ports_list:
-            if p in element:
+            if p in element or element in p:
                 iscu = True
     if not iscu:
         for element in wc:
             for p in ports_list:
-                if p in element:
+                if p in element or element in p:
                     iswc = True
     if not iswc:
         for element in ec:
             for p in ports_list:
-                if p in element:
+                if p in element or element in p:
                     isec = True
     if iscu:
         result.append("Cuba")
@@ -219,14 +232,125 @@ def split_carib(ports, dc, dn):
 
 
 def get_from_code2(dest, ports, dc, dn):
-    print(dest)
     if "CARIBBEAN" in dest:
-        destination = split_carib(ports, dc, dn)
+        destination = split_carib_auto(ports, dc, dn)
         return [destination[0], destination[1]]
     if 'Cococay' in ports or "Nassau" in ports or "Bahama Island" in ports:
         return ['Bahamas', 'BH']
     else:
         return [dc, dn]
+
+
+def split_europe_auto(ports, dn, dc):
+    baltic = []
+    eastern_med = []
+    west_med = []
+    baltic.append("SOU")
+    baltic.append("HAU")
+    baltic.append("FLM")
+    baltic.append("AES")
+    baltic.append("BGO")
+    baltic.append("KWL")
+    baltic.append("GNR")
+    baltic.append("SVG")
+    baltic.append("TOS")
+    baltic.append("LKN")
+    baltic.append("HVG")
+    conn = sqlite3.connect('/home/fixxxer/PycharmProjects/PortsExplorer/ports.db')
+    c = conn.cursor()
+    c.execute("SELECT * FROM portlist WHERE destination_name='Baltics'")
+    for row in c.fetchall():
+        baltic.append(row[0])
+    c.execute("SELECT * FROM portlist WHERE destination_name='EastMed'")
+    for row in c.fetchall():
+        eastern_med.append(row[0])
+    c.execute("SELECT * FROM portlist WHERE destination_name='WestMed'")
+    for row in c.fetchall():
+        west_med.append(row[0])
+    c.close()
+    conn.close()
+
+    ports_visited = ports
+
+    ports_list = []
+    for i in range(len(ports_visited)):
+
+        if i == 0:
+            pass
+        else:
+            ports_list.append(ports_visited[i])
+    for element in baltic:
+        for p in ports_list:
+            if p in element or element in p:
+                return ['Baltic', 'E']
+            elif ports_visited[0] in element or element in ports_visited[0]:
+                return ['Baltic', 'E']
+
+    for element in eastern_med:
+        for p in ports_list:
+            if p in element or element in p:
+                return ['Eastern Med', 'E']
+
+    for element in west_med:
+        for p in ports_list:
+            if p in element or element in p:
+                return ['Western Med', 'E']
+    return [dn, dc]
+
+
+# def split_europe(ports, dn, dc):
+#     baltic = ['Petropavlovsk', 'Bergen', 'Flam', 'Geiranger', 'Alesund',
+#               'Stavanger', 'Skjolden', 'Stockholm', 'Helsinki',
+#               'St. Petersburg', 'Tallinn', 'Riga', 'Warnemunde',
+#               'Copenhagen', 'Kristiansand', 'Skagen', 'Fredericia',
+#               'Rostock (Berlin)', 'Nynashamn', 'Oslo', 'Amsterdam',
+#               'Reykjavik',
+#               'Zeebrugge (Brussels)', 'Southampton']
+#     eastern_med = ['Athens (Piraeus)', 'Katakolon', 'Dubrovnik', 'Mykonos',
+#                    'Rhodes', 'Chania (Souda)', 'Koper', 'Split',
+#                    'Santorini', 'Zadar', 'Corfu', 'Kotor']
+#     west_med = ['Catania,Sicily', 'Ajaccio', 'Alicante', 'Barcelona', 'Bilbao',
+#                 'Cadiz', 'Cannes', 'Cartagena', 'Florence / Pisa (Livorno)',
+#                 'Fuerteventura', 'Funchal (Madeira)', 'Genoa', 'Gibraltar',
+#                 'Ibiza', 'La Coruna', 'La Spezia', 'Lanzarote',
+#                 'Las Palmas', 'Lisbon', 'Malaga', 'Marseille',
+#                 'Messina (Sicily)', 'Montecarlo, Monaco', 'Naples', 'Nice',
+#                 'Palma De Mallorca', 'Ponta Delgada', 'Portofino', 'Provence (Toulon)',
+#                 'Ravenna', 'Sete', 'St. Peter Port', 'Tenerife',
+#                 'Valencia', 'Valletta, Malta', 'Venice', 'Vigo']
+#     europe = ['Rome (Civitavecchia)', 'Le Havre (Paris)', 'Akureyri',
+#               'Belfast', 'Cherbourg', 'Cork (Cobh)', 'Dover',
+#               'Dublin', 'Edinburgh', 'Greenock (Glasgow)', 'Inverness/Loch Ness',
+#               'Lerwick/Shetland', 'Liverpool',
+#               'Waterford (Dunmore E.)']
+#
+#     ports_visited = ports
+#
+#     ports_list = []
+#     for i in range(len(ports_visited)):
+#
+#         if i == 0:
+#             pass
+#         else:
+#             ports_list.append(ports_visited[i])
+#     for element in baltic:
+#         for p in ports_list:
+#             if p in element or element in p:
+#                 return ['Baltic', 'E']
+#             elif ports_visited[0] in element or element in ports_visited[0]:
+#                 return ['Baltic', 'E']
+#
+#     for element in eastern_med:
+#         for p in ports_list:
+#             if p in element or element in p:
+#                 return ['Eastern Med', 'E']
+#
+#     for element in west_med:
+#         for p in ports_list:
+#             if p in element or element in p:
+#                 return ['Western Med', 'E']
+#
+#     return [dn, dc]
 
 
 def parse(c):
@@ -274,7 +398,10 @@ def parse(c):
                 suite_bucket_price = price_details['SUITE'][0]['leastPrice']
             else:
                 suite_bucket_price = "N/A"
-        if "Cruisetour" in brochure_name:
+        try:
+            if "Cruisetour" in brochure_name:
+                continue
+        except TypeError:
             continue
         ports = cruise_results['dimensions']['ShorexPortCode'].items()
         portlist = []
@@ -285,10 +412,16 @@ def parse(c):
             destination_name = destination[0]
             destination_code = destination[1]
         if destination_name == 'Carib':
-            destination = split_carib(portlist, destination_code, destination_name)
+            destination = split_carib_auto(portlist, destination_code, destination_name)
             destination_name = destination[0]
             destination_code = destination[1]
-
+        if 'Europe' in destination_name:
+            dest = split_europe_auto(portlist, destination_name, destination_code)
+            destination_code = dest[1]
+            destination_name = dest[0]
+        if destination_name == "Carib":
+            print(portlist)
+            print(vessel_name, sail_date, return_date)
         temp = [destination_code, destination_name, vessel_id, vessel_name, cruise_id, cruise_line_name, itinerary_id,
                 brochure_name, number_of_nights, sail_date, return_date,
                 interior_bucket_price, oceanview_bucket_price, balcony_bucket_price, suite_bucket_price]
@@ -300,12 +433,12 @@ pool2.map(parse, cruises)
 pool2.close()
 pool2.join()
 
-print(len(to_write))
+
 
 
 def write_file_to_excell(data_array):
     userhome = os.path.expanduser('~')
-    # print(userhome)
+
     now = datetime.datetime.now()
     path_to_file = userhome + '/Dropbox/XLSX/For Assia to test/' + str(now.year) + '-' + str(now.month) + '-' + str(
         now.day) + '/' + str(now.year) + '-' + str(now.month) + '-' + str(now.day) + '- Norwegian Cruise Line.xlsx'
