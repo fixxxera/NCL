@@ -14,7 +14,7 @@ proxies = {'https': 'https://54.153.98.123:8083'}
 # proxies = {'https': 'https://35.166.171.212:3128'}
 # proxies = {'https': 'https://104.198.223.14:80'}
 # proxies = {'https': 'https://192.241.145.201:8080'}
-proxies = {'https': 'https://172.93.148.247:3128'}
+proxies = {'https': 'https://35.186.187.230:3128'}
 headers = {
     "authority": "www.ncl.com",
     "method": "GET",
@@ -269,30 +269,20 @@ def split_europe_auto(ports, dn, dc):
         west_med.append(row[0])
     c.close()
     conn.close()
-
-    ports_visited = ports
-
-    ports_list = []
-    for i in range(len(ports_visited)):
-
-        if i == 0:
-            pass
-        else:
-            ports_list.append(ports_visited[i])
     for element in baltic:
-        for p in ports_list:
+        for p in ports:
             if p in element or element in p:
                 return ['Baltic', 'E']
-            elif ports_visited[0] in element or element in ports_visited[0]:
+            elif ports[0] in element or element in ports[0]:
                 return ['Baltic', 'E']
 
     for element in eastern_med:
-        for p in ports_list:
+        for p in ports:
             if p in element or element in p:
                 return ['Eastern Med', 'E']
 
     for element in west_med:
-        for p in ports_list:
+        for p in ports:
             if p in element or element in p:
                 return ['Western Med', 'E']
     return [dn, dc]
@@ -358,6 +348,7 @@ def parse(c):
     brochure_name = c['title']
     number_of_nights = c['duration']
     destination = c['destination_code']
+    print(brochure_name)
     vessel_id = ''
     cruise_id = ''
     cruise_line_name = 'Norwegian Cruise Lines'
@@ -419,9 +410,6 @@ def parse(c):
             dest = split_europe_auto(portlist, destination_name, destination_code)
             destination_code = dest[1]
             destination_name = dest[0]
-        if destination_name == "Carib":
-            print(portlist)
-            print(vessel_name, sail_date, return_date)
         temp = [destination_code, destination_name, vessel_id, vessel_name, cruise_id, cruise_line_name, itinerary_id,
                 brochure_name, number_of_nights, sail_date, return_date,
                 interior_bucket_price, oceanview_bucket_price, balcony_bucket_price, suite_bucket_price]
@@ -432,8 +420,6 @@ def parse(c):
 pool2.map(parse, cruises)
 pool2.close()
 pool2.join()
-
-
 
 
 def write_file_to_excell(data_array):
