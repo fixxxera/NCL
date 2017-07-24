@@ -6,15 +6,35 @@ from multiprocessing.dummy import Pool as ThreadPool
 import requests
 import sqlite3
 import xlsxwriter
+from bs4 import BeautifulSoup
+from requests.exceptions import ProxyError
 
 session = requests.session()
-proxies = {'https': 'https://165.138.65.233:3128'}
-proxies = {'https': 'https://54.153.98.123:8083'}
+# proxies = {'https': 'https://165.138.65.233:3128'}
+# proxies = {'https': 'https://54.153.98.123:8083'}
 # proxies = {'https': 'https://207.160.104.5:3128'}
 # proxies = {'https': 'https://35.166.171.212:3128'}
 # proxies = {'https': 'https://104.198.223.14:80'}
 # proxies = {'https': 'https://192.241.145.201:8080'}
-proxies = {'https': 'https://35.186.187.230:3128'}
+url = 'https://www.us-proxy.org'
+proxy = {}
+counter = 1
+soup = BeautifulSoup(requests.get(url).text, "lxml")
+table = soup.find('table', {'id': 'proxylisttable'})
+rows = table.find_all('tr')
+rows = rows[1:]
+
+for r in rows:
+    tds = r.find_all('td')
+    if len(tds) != 0:
+        if tds[6].text == 'yes' and tds[4].text == 'anonymous':
+            item = {
+                str(counter): "https://" + str(tds[0].text) + ":" + str(tds[1].text)
+            }
+            proxy.update(item)
+            counter += 1
+counter = 1
+proxies = {'https': proxy[str(counter)]}
 headers = {
     "authority": "www.ncl.com",
     "method": "GET",
@@ -29,21 +49,28 @@ headers = {
 pool = ThreadPool(5)
 pool2 = ThreadPool(5)
 
+page = ''
+notSucc = True
 
-def get_count():
-    response = requests.get(
-        "https://www.ncl.com/search_vacations?cruise=1&cruiseTour=0&cruiseHotel=0&cruiseHotelAir=0&flyCruise=0&numberOfGuests=4294953449&state=undefined&pageSize=10&currentPage=",
-        proxies=proxies)
-    tmpcruise_results = response.json()
-    tmpline = tmpcruise_results['meta']
-    total_record_count = tmpline['aggregate_record_count']
-    return total_record_count
+total_cruise_count = 0
+counter = 1
+
+while notSucc:
+    try:
+        proxies = {'https': proxy[str(counter)]}
+        print(proxies)
+        response = requests.get("https://www.ncl.com/search_vacations?cruise=1&cruiseTour=0&cruiseHotel=0&cruiseHotelAir=0&flyCruise=0&numberOfGuests=4294953449&state=undefined&pageSize=10&currentPage=", proxies=proxies)
+        notSucc = False
+        tmpcruise_results = response.json()
+        tmpline = tmpcruise_results['meta']
+        total_record_count = tmpline['aggregate_record_count']
+        total_cruise_count = total_record_count
+    except ProxyError:
+        counter += 1
+        notSucc = True
 
 
-total_cruise_count = get_count()
 total_page_count = math.ceil(int(total_cruise_count) / 12)
-session.headers.update(headers)
-session.proxies.update(proxies)
 cruises = []
 page_counter = 1
 nao = 12
