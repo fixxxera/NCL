@@ -1,40 +1,42 @@
 import datetime
 import math
 import os
+import sqlite3
 from multiprocessing.dummy import Pool as ThreadPool
 
 import requests
-import sqlite3
 import xlsxwriter
 from bs4 import BeautifulSoup
-from requests.exceptions import ProxyError
 
 session = requests.session()
-# proxies = {'https': 'https://165.138.65.233:3128'}
-# proxies = {'https': 'https://54.153.98.123:8083'}
-# proxies = {'https': 'https://207.160.104.5:3128'}
-# proxies = {'https': 'https://35.166.171.212:3128'}
-# proxies = {'https': 'https://104.198.223.14:80'}
-# proxies = {'https': 'https://192.241.145.201:8080'}
-url = 'https://www.us-proxy.org'
-proxy = {}
-counter = 1
-soup = BeautifulSoup(requests.get(url).text, "lxml")
-table = soup.find('table', {'id': 'proxylisttable'})
-rows = table.find_all('tr')
-rows = rows[1:]
 
-for r in rows:
-    tds = r.find_all('td')
-    if len(tds) != 0:
-        if tds[6].text == 'yes' and tds[4].text == 'anonymous':
-            item = {
-                str(counter): "https://" + str(tds[0].text) + ":" + str(tds[1].text)
-            }
-            proxy.update(item)
-            counter += 1
-counter = 1
-proxies = {'https': proxy[str(counter)]}
+
+def get_proxy():
+    print("Looking for a working proxy server")
+    soup = BeautifulSoup(requests.get('https://www.us-proxy.org').text, 'lxml')
+    table = soup.find('table', {'id': 'proxylisttable'})
+    tbody = table.find('tbody')
+    proxies = []
+    for tr in tbody:
+        columns = tr.find_all('td')
+        if columns[2].text in 'US' and columns[4].text in 'anonymous' and columns[6].text in 'yes':
+            proxies.append("https://" + columns[0].text + ":" + columns[1].text)
+    for p in proxies:
+        try:
+            proxy_line = {'https': p}
+            resp = requests.get('https://www.ncl.com/search_vacations?cruise=1&cruiseTour=0&cruiseHotel=0&cruiseHotelAir=0&flyCruise=0&numberOfGuests=4294953449&state=undefined&pageSize=10&currentPage=', proxies=proxy_line, timeout=10)
+            if resp.ok:
+                print("Found one!")
+                return proxy_line
+            else:
+                print(p, "Not working")
+        except requests.exceptions.ProxyError:
+            print(p, "Not working")
+        except requests.exceptions.ConnectTimeout:
+            print(p, "Not working")
+        except requests.exceptions.ReadTimeout:
+            print(p, "Not working")
+
 headers = {
     "authority": "www.ncl.com",
     "method": "GET",
@@ -46,30 +48,16 @@ headers = {
     "cookie": "AkaUTrackingID=5D33489F106C004C18DFF0A6C79B44FD; AkaSTrackingID=F942E1903C8B5868628CF829225B6C0F; UrCapture=1d20f804-718a-e8ee-b1d8-d4f01150843f; BIGipServerpreprod2_www2.ncl.com_http=61515968.20480.0000; _gat_tealium_0=1; BIGipServerpreprod2_www.ncl.com_r4=1957341376.10275.0000; MP_COUNTRY=us; MP_LANG=en; mp__utma=35125182.281213660.1481488771.1481488771.1481488771.1; mp__utmc=35125182; mp__utmz=35125182.1481488771.1.1.utmccn=(direct)|utmcsr=(direct)|utmcmd=(none); utag_main=_st:1481490575797$ses_id:1481489633989%3Bexp-session; s_pers=%20s_fid%3D37513E254394AD66-1292924EC7FC34CB%7C1544560775848%3B%20s_nr%3D1481488775855-New%7C1484080775855%3B; s_sess=%20s_cc%3Dtrue%3B%20c%3DundefinedDirect%2520LoadDirect%2520Load%3B%20s_sq%3D%3B; _ga=GA1.2.969979116.1481488770; mp__utmb=35125182; NCL_LOCALE=en-US; SESS93afff5e686ba2a15ce72484c3a65b42=5ecffd6d110c231744267ee50e4eeb79; ak_location=US,NY,NEWYORK,501; Ncl_region=NY; optimizelyEndUserId=oeu1481488768465r0.23231006365903206",
     "Proxy-Authorization": "Basic QFRLLTVmZjIwN2YzLTlmOGUtNDk0MS05MjY2LTkxMjdiMTZlZTI5ZDpAVEstNWZmMjA3ZjMtOWY4ZS00OTQxLTkyNjYtOTEyN2IxNmVlMjlk"
 }
+proxy = get_proxy()
+response = requests.get("https://www.ncl.com/search_vacations?cruise=1&cruiseTour=0&cruiseHotel=0&cruiseHotelAir=0&flyCruise=0&numberOfGuests=4294953449&state=undefined&pageSize=10&currentPage=", proxies=proxy)
+tmpcruise_results = response.json()
+tmpline = tmpcruise_results['meta']
+total_record_count = tmpline['aggregate_record_count']
+total_cruise_count = total_record_count
 pool = ThreadPool(5)
 pool2 = ThreadPool(5)
-
 page = ''
-notSucc = True
-
-total_cruise_count = 0
 counter = 1
-
-while notSucc:
-    try:
-        proxies = {'https': proxy[str(counter)]}
-        print(proxies)
-        response = requests.get("https://www.ncl.com/search_vacations?cruise=1&cruiseTour=0&cruiseHotel=0&cruiseHotelAir=0&flyCruise=0&numberOfGuests=4294953449&state=undefined&pageSize=10&currentPage=", proxies=proxies)
-        notSucc = False
-        tmpcruise_results = response.json()
-        tmpline = tmpcruise_results['meta']
-        total_record_count = tmpline['aggregate_record_count']
-        total_cruise_count = total_record_count
-    except ProxyError:
-        counter += 1
-        notSucc = True
-
-
 total_page_count = math.ceil(int(total_cruise_count) / 12)
 cruises = []
 page_counter = 1
@@ -77,6 +65,7 @@ nao = 12
 to_write = []
 keys = []
 urls = set()
+
 while page_counter <= int(total_page_count):
 
     if page_counter == 1:
@@ -92,7 +81,7 @@ while page_counter <= int(total_page_count):
 
 
 def send_req(link):
-    response = session.post(link, proxies=proxies, headers=headers).json()
+    response = session.post(link, proxies=proxy, headers=headers).json()
     for line in response['results']:
         cruises.append(line)
 
@@ -375,7 +364,6 @@ def parse(c):
     brochure_name = c['title']
     number_of_nights = c['duration']
     destination = c['destination_code']
-    print(brochure_name)
     vessel_id = ''
     cruise_id = ''
     cruise_line_name = 'Norwegian Cruise Lines'
@@ -386,7 +374,7 @@ def parse(c):
 
     price_grid_url = c['price_grid_url']
     price_url = "https://www.ncl.com" + price_grid_url + ""
-    page = session.post(price_url, headers=headers, proxies=proxies)
+    page = session.post(price_url, headers=headers, proxies=proxy)
     cruise_results = page.json()
     for each in cruise_results['results']:
         key = each['Record']['Properties']['p_Package_ID']
@@ -441,6 +429,7 @@ def parse(c):
                 brochure_name, number_of_nights, sail_date, return_date,
                 interior_bucket_price, oceanview_bucket_price, balcony_bucket_price, suite_bucket_price]
         tmp2 = [temp]
+        print(temp)
         to_write.append(tmp2)
 
 
@@ -547,8 +536,6 @@ def write_file_to_excell(data_array):
                         column_count += 1
                     elif column_count == 11:
                         tmp = str(r)
-                        cell = ""
-                        number = 0
                         if "." in tmp:
                             number = round(float(tmp))
                         else:
@@ -561,8 +548,6 @@ def write_file_to_excell(data_array):
                         column_count += 1
                     elif column_count == 12:
                         tmp = str(r)
-                        cell = ""
-                        number = 0
                         if "." in tmp:
                             number = round(float(tmp))
                         else:
@@ -575,8 +560,6 @@ def write_file_to_excell(data_array):
                         column_count += 1
                     elif column_count == 13:
                         tmp = str(r)
-                        cell = ""
-                        number = 0
                         if "." in tmp:
                             number = round(float(tmp))
                         else:
@@ -589,8 +572,6 @@ def write_file_to_excell(data_array):
                         column_count += 1
                     elif column_count == 14:
                         tmp = str(r)
-                        cell = ""
-                        number = 0
                         if "." in tmp:
                             number = round(float(tmp))
                         else:
