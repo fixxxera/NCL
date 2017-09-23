@@ -362,6 +362,8 @@ def split_europe_auto(ports, dn, dc):
 def parse(c):
     vessel_name = c['ship_name']
     brochure_name = c['title']
+    if "with Hotel Bundle" in brochure_name:
+        return
     number_of_nights = c['duration']
     destination = c['destination_code']
     vessel_id = ''
